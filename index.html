@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Desbloqueo por Sentadillas</title>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+  <style>
+    body { font-family: -apple-system, sans-serif; background: #111; color: white; text-align: center; margin: 0; padding: 15px; }
+    #video-box { position: relative; width: 100%; max-width: 400px; margin: 15px auto; border-radius: 16px; overflow: hidden; background: #222; }
+    video { width: 100%; transform: scaleX(-1); display: block; }
+    #overlay { position: absolute; top: 15px; left: 0; right: 0; font-size: 32px; font-weight: 800; text-shadow: 0 2px 6px rgba(0,0,0,0.9); }
+    .status { background: #2563eb; padding: 8px 16px; border-radius: 20px; font-size: 15px; display: inline-block; }
+  </style>
+</head>
+<body>
+  <h2>🏋️ Haz 10 sentadillas</h2>
+  <div id="video-box">
+    <video id="webcam" autoplay playsinline></video>
+    <div id="overlay"><span id="counter">0</span> / 10</div>
+  </div>
+  <div class="status" id="status">Iniciando cámara...</div>
+
+  <script>
+    const video = document.getElementById('webcam');
+    const counterEl = document.getElementById('counter');
+    const statusEl = document.getElementById('status');
+
+    let count = 0;
+    let stage = "up";
+    const TARGET = 10;
+    let unlocked = false;
+
+    function calculateAngle(a, b, c) {
+      let radians = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
+      let angle = Math.abs(radians * 180.0 / Math.PI);
+      if (angle > 180.0) angle = 360 - angle;
+      return angle;
+    }
+
+    function onResults(results) {
+      if (!results.poseLandmarks || unlocked) return;
+      const lm = results.poseLandmarks;
+      const hip = lm[24];
+      const knee = lm[26];
+      const ankle = lm[28];
+
+      if (hip && knee && ankle && hip.visibility > 0.6 && knee.visibility > 0.6) {
+        statusEl.innerText = "¡Cuerpo detectado! Empieza a bajar";
+        const angle = calculateAngle(hip, knee, ankle);
+
+        if (angle < 95) {
+          stage = "down";
+        }
+        if (angle > 160 && stage === "down") {
+          stage = "up";
+          count++;
+          counterEl.innerText = count;
+
+          if (count >= TARGET && !unlocked) {
+            unlocked = true;
+            statusEl.innerText = "¡Conseguido! Abriendo atajo...";
+            setTimeout(() => {
+              window.location.href = "shortcuts://run-shortcut?name=Desbloquear%20tiempo";
+            }, 600);
+          }
+        }
+      } else {
+        statusEl.innerText = "Aléjate hasta que se vean cadera y rodillas";
+      }
+    }
+
+    const pose = new Pose({ locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${f}` });
+    pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+    pose.onResults(onResults);
+
+    const camera = new Camera(video, {
+      onFrame: async () => { await pose.send({ image: video }); },
+      width: 480, height: 640
+    });
+    camera.start();
+  </script>
+</body>
+</html>
